@@ -1,1 +1,5 @@
 .gittoken
+.bottoken
+main
+go.mod
+go.sum
