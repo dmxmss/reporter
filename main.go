@@ -3,6 +3,7 @@ package main
 import (
   "os"
   "strings"
+  // "errors"
   "fmt"
   "log"
   "context"
@@ -18,61 +19,87 @@ var (
 
 func main() {
   ctx := context.Background()
-  ts := oauth2.StaticTokenSource(
-    &oauth2.Token{AccessToken: gitToken},
-  )
-  tc := oauth2.NewClient(ctx, ts)
-  githubClient := github.NewClient(tc)
+  githubClient := getGitHubClient(ctx)
 
   bot, err := tgbotapi.NewBotAPI(botToken)
   if err != nil {
-    log.Panic(err)
+    log.Fatal(err)
   }
 
   bot.Debug = true
 
   log.Printf("Authorized on account %s", bot.Self.UserName)
 
-  u := tgbotapi.NewUpdate(0)
-  u.Timeout = 60
-  
-  updates := bot.GetUpdatesChan(u)
-
-  for update := range updates {
-    if strings.Contains(update.Message.Text, "github.com") {
-      repoURL := update.Message.Text
-      repoInfo := getGitHubRepoInfo(githubClient, ctx, repoURL) 
-
-      msg := tgbotapi.NewMessage(update.Message.Chat.ID, repoInfo)
-      bot.Send(msg)
-    } else {
-      msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Please send valid github repo link")
-      bot.Send(msg)
-    }
+  err = startPolling(bot, githubClient, ctx)
+  if err != nil {
+    log.Fatal(err)
   }
 }
 
-func getGitHubRepoInfo(client *github.Client, ctx context.Context, repoURL string) string {
-  parts := strings.Split(repoURL, "/")
-  if len(parts) < 5 {
-    return "Invalid GitHub repository URL"
+func getGitHubClient(ctx context.Context) *github.Client {
+  ts := oauth2.StaticTokenSource(
+    &oauth2.Token{AccessToken: gitToken},
+  )
+  tc := oauth2.NewClient(ctx, ts)
+  githubClient := github.NewClient(tc)
+
+  return githubClient
+}
+
+func startPolling(bot *tgbotapi.BotAPI, githubClient *github.Client, ctx context.Context) error {
+  u := tgbotapi.NewUpdate(0)
+  u.Timeout = 60
+
+  updates := bot.GetUpdatesChan(u)
+
+  for update := range updates {
+    msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+    for _, repoURL := range strings.Split(update.Message.Text, "\n") {
+      if isValidRepoURL(repoURL) {
+        repoInfo, err := getGitHubRepoInfo(githubClient, ctx, repoURL) 
+        if err != nil {
+          msg.Text += repoURL + " not found"
+          break
+        }
+
+        msg.Text += repoInfo
+      } else {
+        msg.Text += "Invalid github repo link: " + repoURL
+        break
+      }
+
+      msg.Text += "\n\n"
+    }
+
+    bot.Send(msg)
   }
+
+  return nil
+}
+
+func isValidRepoURL(repoURL string) bool {
+  return strings.HasPrefix(repoURL, "https://github.com/") && len(strings.Split(repoURL, "/")) == 5
+}
+
+func getGitHubRepoInfo(client *github.Client, ctx context.Context, repoURL string) (string, error) {
+  parts := strings.Split(repoURL, "/")
 
   owner := parts[3]
   repo := parts[4]
 
   repository, _, err := client.Repositories.Get(ctx, owner, repo)
   if err != nil {
-    return fmt.Sprintf("Error fetching repository info: %v", err)
+    return "", err
   }
 
   info := fmt.Sprintf("Repository: %s\n", *repository.FullName)
-	info += fmt.Sprintf("Description: %s\n", *repository.Description)
+  if(repository.Description != nil) {
+	  info += fmt.Sprintf("Description: %s\n", *repository.Description) 
+  }
 	info += fmt.Sprintf("Stars: %d\n", *repository.StargazersCount)
 	info += fmt.Sprintf("Forks: %d\n", *repository.ForksCount)
 	info += fmt.Sprintf("Watchers: %d\n", *repository.WatchersCount)
 	info += fmt.Sprintf("Language: %s\n", *repository.Language)
-	info += fmt.Sprintf("URL: %s\n", *repository.HTMLURL)
 
-  return info
+  return info, nil
 }
