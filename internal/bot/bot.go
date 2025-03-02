@@ -130,6 +130,7 @@ func (bot *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
   if !exists || len(userState.GitHubURLs) == 0 {
     msg := tgbotapi.NewMessage(chatID, "No GitHub links found, please provide ones.") 
     bot.Send(msg)
+    delete(users, chatID)
     return
   }
 
