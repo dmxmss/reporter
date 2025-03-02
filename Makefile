@@ -2,7 +2,7 @@ TOKEN := $(shell cat .gittoken)
 BOTTOKEN := $(shell cat .bottoken)
 
 run:
-	go build src/main.go
+	go build main.go
 	mv main build
 	TOKEN=$(TOKEN) BOTTOKEN=$(BOTTOKEN) ./build/main
 r:

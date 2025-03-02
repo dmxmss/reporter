@@ -1,5 +1,7 @@
 .gittoken
 .bottoken
+pkg
+build
 main
 go.mod
 go.sum

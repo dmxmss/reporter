@@ -1,14 +1,14 @@
 package main
 
 import (
-  "github.com/dmxmss/reporter/src/bot"
+  "reporter/internal/bot"
   "log"
 )
 
 func main() {
-  githubClient := github_client.newGitHubClient()
+  bot, err := bot.InitBot()
 
-  if bot, err := bot.initBot(); err != nil {
+  if err != nil {
     log.Fatal(err)
     return
   }
@@ -17,5 +17,5 @@ func main() {
 
   log.Printf("Authorized on account %s", bot.Self.UserName)
 
-  bot.startPolling()
+  bot.StartPolling()
 }
